@@ -415,6 +415,61 @@
   }
   .generate-btn:hover { background: #e0bb5a; transform: scale(0.98); }
 
+  /* Start Fresh */
+  .fresh-bar {
+    background: #fff8e1;
+    border: 1px solid #f0e4b0;
+    border-radius: 4px;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    gap: 16px;
+  }
+  .fresh-bar p {
+    font-size: 13px;
+    color: #7a6010;
+    margin: 0;
+  }
+  .fresh-bar p strong { color: #5a4a00; }
+  .fresh-btn {
+    background: none;
+    border: 1px solid #c9a84c;
+    color: #7a6010;
+    padding: 8px 20px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .fresh-btn:hover { background: #c9a84c; color: #0d0d0d; }
+
+  /* Auto-save indicator */
+  #save-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 24px;
+    background: #0d0d0d;
+    color: #c9a84c;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    z-index: 200;
+  }
+  #save-indicator.show { opacity: 1; }
+
   /* Footer */
   .doc-footer {
     text-align: center;
@@ -592,6 +647,9 @@
 <!-- Progress Bar -->
 <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-fill"></div></div>
 
+<!-- Auto-save indicator -->
+<div id="save-indicator">✓ Saved</div>
+
 <!-- Cover -->
 <div class="cover">
   <div class="cover-inner">
@@ -616,6 +674,12 @@
 </div>
 
 <div class="container">
+
+  <!-- Start Fresh Bar -->
+  <div class="fresh-bar">
+    <p><strong>Your answers are saved automatically</strong> in this browser. If you need to start over, click the button.</p>
+    <button class="fresh-btn" onclick="startFresh()">Start Fresh</button>
+  </div>
 
   <!-- Intro -->
   <div class="intro-box">
@@ -1263,6 +1327,8 @@
   ];
 
   const totalQuestions = QUESTIONS.reduce((sum, s) => sum + s.items.length, 0);
+  const STORAGE_KEY = 'veluxe_scope_answers';
+  let saveTimer = null;
 
   function getAnswer(section, index) {
     const el = document.querySelector(`.answer-input[data-section="${section}"][data-index="${index}"]`);
@@ -1277,8 +1343,40 @@
     document.getElementById('answered-count').textContent = answered;
   }
 
+  function saveToStorage() {
+    const data = {};
+    document.querySelectorAll('.answer-input').forEach(input => {
+      const key = input.dataset.section + '_' + input.dataset.index;
+      data[key] = input.value;
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const indicator = document.getElementById('save-indicator');
+    indicator.classList.add('show');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => indicator.classList.remove('show'), 1500);
+  }
+
+  function restoreFromStorage() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    document.querySelectorAll('.answer-input').forEach(input => {
+      const key = input.dataset.section + '_' + input.dataset.index;
+      if (data[key]) input.value = data[key];
+    });
+    updateProgress();
+  }
+
+  function startFresh() {
+    if (!confirm('Clear all answers and start fresh? This cannot be undone.')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    document.querySelectorAll('.answer-input').forEach(input => input.value = '');
+    updateProgress();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   document.querySelectorAll('.answer-input').forEach(input => {
-    input.addEventListener('input', updateProgress);
+    input.addEventListener('input', () => { updateProgress(); saveToStorage(); });
     input.addEventListener('keydown', e => {
       if (e.key === 'Tab') {
         e.preventDefault();
@@ -1289,6 +1387,8 @@
       }
     });
   });
+
+  restoreFromStorage();
 
   function generatePad() {
     let answeredCount = 0;
